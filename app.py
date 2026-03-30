@@ -7,59 +7,80 @@ from streamlit_gsheets import GSheetsConnection
 st.set_page_config(page_title="Project & Sales Tracker", layout="wide")
 
 # --- Google Sheets Connection ---
-# แบบใหม่: ระบบจะไปดึง URL และ Key จากหน้า Secrets (Settings) ของ Streamlit Cloud มาให้เอง
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def load_data():
-    # ไม่ต้องใส่ spreadsheet_url แล้ว เพราะเราใส่ไว้ใน [connections.gsheets] spreadsheet ในหน้า Secrets แล้ว
-    return conn.read()
+    try:
+        # อ่านข้อมูลทั้งหมด (ใช้ ttl=0 เพื่อให้ดึงค่าใหม่ล่าสุดเสมอ ไม่ติด Cache)
+        data = conn.read(ttl=0)
+        # ลบแถวที่ว่างทิ้ง และแปลงทุกอย่างในคอลัมน์สำคัญเป็น String เพื่อป้องกัน Error
+        data = data.dropna(how='all')
+        if not data.empty:
+            for col in ['project', 'name', 'assignee', 'status']:
+                if col in data.columns:
+                    data[col] = data[col].astype(str).replace('nan', '')
+        return data
+    except Exception as e:
+        st.error(f"ไม่สามารถดึงข้อมูลจาก Sheets ได้: {e}")
+        return pd.DataFrame(columns=['project', 'name', 'assignee', 'deadline', 'status', 'value', 'dependency', 'follow_up', 'next_step'])
 
-# --- Load Initial Data ---
+# --- Load Data ---
 df = load_data()
 
 # --- Interface ---
 st.title("💼 Project Activity & Sales Tracker")
 
 # --- Form: Create Activity ---
-with st.expander("➕ เพิ่มกิจกรรมใหม่ (Add Activity to Project)"):
-    # 1. ส่วนการเลือก Project (มีอยู่แล้วหรือสร้างใหม่)
-    existing_projects = sorted(df['project'].unique().tolist()) if not df.empty else []
+with st.expander("➕ เพิ่มกิจกรรมใหม่ (Add Activity to Project)", expanded=True):
+    # ดึงรายชื่อโปรเจกต์ที่ไม่ซ้ำกัน และต้องไม่เป็นค่าว่าง
+    if not df.empty and 'project' in df.columns:
+        existing_projects = sorted([p for p in df['project'].unique() if p.strip() != ""])
+    else:
+        existing_projects = []
     
     col_p1, col_p2 = st.columns([2, 1])
     with col_p1:
-        project_selection = st.selectbox("เลือกโปรเจกต์ที่มีอยู่", ["-- สร้างโปรเจกต์ใหม่ --"] + existing_projects)
+        # แก้ไขจุดนี้: ใช้ index=0 เป็น default
+        project_selection = st.selectbox(
+            "เลือกโปรเจกต์ที่มีอยู่", 
+            ["-- สร้างโปรเจกต์ใหม่ --"] + existing_projects,
+            key="proj_select"
+        )
     with col_p2:
-        new_project_name = st.text_input("หรือพิมพ์ชื่อโปรเจกต์ใหม่")
+        new_project_input = st.text_input("หรือพิมพ์ชื่อโปรเจกต์ใหม่", key="new_proj_input")
 
-    final_project_name = new_project_name if project_selection == "-- สร้างโปรเจกต์ใหม่ --" else project_selection
+    # สรุปชื่อโปรเจกต์ที่จะใช้
+    if project_selection == "-- สร้างโปรเจกต์ใหม่ --":
+        final_project_name = new_project_input.strip()
+    else:
+        final_project_name = project_selection
 
-    # 2. ส่วนการกรอกรายละเอียด Activity
     if final_project_name:
-        with st.form("activity_form"):
-            st.info(f"กำลังเพิ่มกิจกรรมให้โปรเจกต์: **{final_project_name}**")
+        with st.form("activity_form", clear_on_submit=True):
+            st.info(f"📁 โปรเจกต์: **{final_project_name}**")
             
             c1, c2, c3 = st.columns(3)
             with c1:
-                act_name = st.text_input("ชื่อกิจกรรม (Activity Name)")
+                act_name = st.text_input("ชื่อกิจกรรม")
                 assignee = st.text_input("ผู้รับผิดชอบ")
                 deadline = st.date_input("Deadline", datetime.now())
             with c2:
-                status = st.selectbox("สถานะปัจจุบัน", ["Open", "In Progress", "Waiting for Client", "Closed"])
-                lead_value = st.number_input("มูลค่า (Lead Value)", min_value=0, step=1000)
+                status = st.selectbox("สถานะ", ["Open", "In Progress", "Waiting for Client", "Closed"])
+                lead_value = st.number_input("มูลค่า (฿)", min_value=0)
                 
-                # Logic: ดึงเฉพาะ Activity ของโปรเจกต์เดียวกันมาทำ Dependency
-                relevant_activities = df[df['project'] == final_project_name]['name'].unique().tolist()
-                dependency = st.selectbox("ต้องทำสิ่งนี้ก่อน (Dependency)", ["None"] + relevant_activities)
+                # กรอง Dependency เฉพาะของโปรเจกต์นี้
+                rel_acts = df[df['project'] == final_project_name]['name'].unique().tolist() if not df.empty else []
+                dependency = st.selectbox("Dependency (ทำต่อจาก...)", ["None"] + rel_acts)
                 
             with c3:
-                follow_up = st.text_input("ต้องติดตามผลจากใคร")
+                follow_up = st.text_input("ติดตามผลจากใคร")
                 next_step = st.text_area("Next Step Action")
 
-            submit = st.form_submit_button("บันทึกกิจกรรม")
+            submit = st.form_submit_button("บันทึกข้อมูล")
 
             if submit:
                 if not act_name:
-                    st.error("กรุณาระบุชื่อกิจกรรม")
+                    st.warning("กรุณาใส่ชื่อกิจกรรมด้วยครับ")
                 else:
                     new_row = pd.DataFrame([{
                         "project": final_project_name,
@@ -73,54 +94,8 @@ with st.expander("➕ เพิ่มกิจกรรมใหม่ (Add Acti
                         "next_step": next_step
                     }])
                     
+                    # รวมและอัปเดต
                     updated_df = pd.concat([df, new_row], ignore_index=True)
                     conn.update(data=updated_df)
-                    st.success(f"บันทึกกิจกรรม '{act_name}' เรียบร้อยแล้ว!")
+                    st.success("บันทึกสำเร็จ!")
                     st.rerun()
-    else:
-        st.warning("กรุณาเลือกหรือระบุชื่อโปรเจกต์ก่อนเริ่ม")
-
-# --- Search & Filter Section ---
-st.divider()
-st.subheader("🔍 ค้นหาและติดตามผล")
-
-col_f1, col_f2 = st.columns(2)
-with col_f1:
-    search_project = st.multiselect("กรองตามชื่อโปรเจกต์", options=existing_projects)
-with col_f2:
-    search_text = st.text_input("ค้นหาจากชื่อกิจกรรม/ผู้รับผิดชอบ")
-
-# Apply Filters
-filtered_df = df.copy()
-
-# บังคับให้คอลัมน์ที่ต้องใช้ค้นหาเป็น String ทั้งหมดเพื่อป้องกัน Error
-filtered_df['name'] = filtered_df['name'].astype(str)
-filtered_df['project'] = filtered_df['project'].astype(str)
-filtered_df['assignee'] = filtered_df['assignee'].astype(str)
-
-if search_project:
-    filtered_df = filtered_df[filtered_df['project'].isin(search_project)]
-if search_text:
-    # ค้นหาในคอลัมน์ที่แปลงเป็น String เรียบร้อยแล้ว
-    filtered_df = filtered_df[filtered_df['name'].str.contains(search_text, case=False, na=False) | 
-                              filtered_df['assignee'].str.contains(search_text, case=False, na=False)]
-# --- Display Result ---
-if not filtered_df.empty:
-    # คำนวณยอดเงินรวม (Sales Pipeline)
-    total_pipeline = pd.to_numeric(filtered_df['value']).sum()
-    st.metric("Total Filtered Value", f"฿{total_pipeline:,.2f}")
-    
-    # แสดงตารางแบบจัดกลุ่มตามโปรเจกต์
-    st.dataframe(
-        filtered_df.sort_values(by=['project', 'deadline']),
-        column_config={
-            "project": "Project Name",
-            "name": "Activity",
-            "value": st.column_config.NumberColumn("Value (฿)", format="%d"),
-            "dependency": "Must do first"
-        },
-        use_container_width=True,
-        hide_index=True
-    )
-else:
-    st.info("ไม่พบข้อมูลที่ตรงตามเงื่อนไข")
