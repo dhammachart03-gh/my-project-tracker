@@ -7,18 +7,12 @@ from streamlit_gsheets import GSheetsConnection
 st.set_page_config(page_title="Project & Sales Tracker", layout="wide")
 
 # --- Google Sheets Connection ---
-# ก๊อปปี้ URL จาก Google Sheet ที่แชร์แบบ Editor มาวางที่นี่
-gsheet_url = "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID_HERE/edit?usp=sharing"
-
-df = conn.read()
+# แบบใหม่: ระบบจะไปดึง URL และ Key จากหน้า Secrets (Settings) ของ Streamlit Cloud มาให้เอง
+conn = st.connection("gsheets", type=GSheetsConnection)
 
 def load_data():
-    try:
-        # ดึงข้อมูล 9 คอลัมน์หลัก
-        data = conn.read(spreadsheet=gsheet_url, usecols=list(range(9)))
-        return data.dropna(how='all') # ลบแถวที่ว่างทั้งหมดออก
-    except:
-        return pd.DataFrame(columns=['project', 'name', 'assignee', 'deadline', 'status', 'value', 'dependency', 'follow_up', 'next_step'])
+    # ไม่ต้องใส่ spreadsheet_url แล้ว เพราะเราใส่ไว้ใน [connections.gsheets] spreadsheet ในหน้า Secrets แล้ว
+    return conn.read()
 
 # --- Load Initial Data ---
 df = load_data()
