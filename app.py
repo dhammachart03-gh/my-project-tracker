@@ -8,7 +8,7 @@ st.set_page_config(page_title="Project & Sales Tracker", layout="wide")
 
 # --- Google Sheets Connection ---
 # ก๊อปปี้ URL จาก Google Sheet ที่แชร์แบบ Editor มาวางที่นี่
-gsheet_url = "https://docs.google.com/spreadsheets/d/1B1JT3yRh1R1u2fGSYBCSWR3jrDqU8QoEmNA9lzQGlXs/edit?gid=0#gid=0"
+gsheet_url = "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID_HERE/edit?usp=sharing"
 
 conn = st.connection("gsheets", type=GSheetsConnection)
 
@@ -80,7 +80,7 @@ with st.expander("➕ เพิ่มกิจกรรมใหม่ (Add Acti
                     }])
                     
                     updated_df = pd.concat([df, new_row], ignore_index=True)
-                    conn.update(spreadsheet=https://docs.google.com/spreadsheets/d/1B1JT3yRh1R1u2fGSYBCSWR3jrDqU8QoEmNA9lzQGlXs/edit?gid=0#gid=0, data=updated_df)
+                    conn.update(spreadsheet=gsheet_url, data=updated_df)
                     st.success(f"บันทึกกิจกรรม '{act_name}' เรียบร้อยแล้ว!")
                     st.rerun()
     else:
