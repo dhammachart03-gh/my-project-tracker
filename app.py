@@ -99,3 +99,84 @@ with st.expander("➕ เพิ่มกิจกรรมใหม่ (Add Acti
                     conn.update(data=updated_df)
                     st.success("บันทึกสำเร็จ!")
                     st.rerun()
+
+############################### ส่วนการแสดงผล และ ค้นหา #########################
+
+# --- ส่วนการแสดงผลและค้นหา (Search & Display Section) ---
+st.divider()
+st.header("📊 Dashboard & Tracking")
+
+# เตรียมข้อมูลวันที่สำหรับการ Filter
+today = datetime.now().date()
+next_7_days = today + timedelta(days=7)
+
+# ส่วน Filter ด้านบน
+col_f1, col_f2, col_f3 = st.columns(3)
+with col_f1:
+    search_proj = st.selectbox("🔍 ดูตามโปรเจกต์", ["ทั้งหมด"] + existing_projects)
+with col_f2:
+    view_option = st.radio(
+        "📅 กรองตามระยะเวลา",
+        ["ทั้งหมด", "ต้องส่งวันนี้", "ต้องส่งภายใน 7 วัน"],
+        horizontal=True
+    )
+with col_f3:
+    need_follow_up = st.checkbox("🔔 เฉพาะงานที่ต้องตามผล (Follow-up)")
+
+# --- Logic การกรองข้อมูล ---
+display_df = df.copy()
+
+# 1. กรองตามโปรเจกต์
+if search_proj != "ทั้งหมด":
+    display_df = display_df[display_df['project'] == search_proj]
+
+# 2. กรองตามระยะเวลา (Deadline)
+display_df['deadline_dt'] = pd.to_datetime(display_df['deadline']).dt.date
+if view_option == "ต้องส่งวันนี้":
+    display_df = display_df[display_df['deadline_dt'] == today]
+elif view_option == "ต้องส่งภายใน 7 วัน":
+    display_df = display_df[(display_df['deadline_dt'] >= today) & (display_df['deadline_dt'] <= next_7_days)]
+
+# 3. กรองตามงานที่ต้องตามผล (ถ้ามีระบุคนในช่อง follow_up)
+if need_follow_up:
+    # กรองเฉพาะแถวที่ follow_up ไม่ว่าง และไม่ใช่ 'nan' หรือ '-'
+    display_df = display_df[
+        (display_df['follow_up'].str.len() > 1) & 
+        (display_df['follow_up'] != 'nan') &
+        (display_df['status'] != 'Closed')
+    ]
+
+# --- ส่วนการแสดงผลลัพธ์ ---
+if not display_df.empty:
+    # แสดงตัวเลขสรุป (Metrics)
+    m1, m2, m3 = st.columns(3)
+    m1.metric("จำนวนกิจกรรม", len(display_df))
+    m2.metric("มูลค่ารวมในหน้านี้", f"฿{pd.to_numeric(display_df['value']).sum():,.0f}")
+    m3.info(f"📅 วันนี้วันที่: {today.strftime('%d/%m/%Y')}")
+
+    # ตารางแสดงผล
+    st.dataframe(
+        display_df.sort_values(by='deadline_dt'),
+        column_config={
+            "project": "Project Name",
+            "name": "Activity",
+            "deadline": "Due Date",
+            "status": "Status",
+            "follow_up": "Follow-up With",
+            "next_step": "Action Plan",
+            "deadline_dt": None # ซ่อนคอลัมน์นี้
+        },
+        use_container_width=True,
+        hide_index=True
+    )
+    
+    # เพิ่มส่วนสำหรับงานที่ต้อง "ตามผล" โดยเฉพาะ เพื่อความชัดเจน
+    if need_follow_up:
+        st.subheader("📢 รายการที่ต้องเร่งติดตาม (Follow-up List)")
+        for _, row in display_df.iterrows():
+            with st.chat_message("user"):
+                st.write(f"**โครงการ:** {row['project']} | **งาน:** {row['name']}")
+                st.write(f"🚩 **ต้องตามจาก:** {row['follow_up']} | **กำหนดส่ง:** {row['deadline']}")
+                st.write(f"📝 **แผนถัดไป:** {row['next_step']}")
+else:
+    st.info("💡 ไม่พบข้อมูลที่ตรงกับเงื่อนไขที่คุณเลือก")
