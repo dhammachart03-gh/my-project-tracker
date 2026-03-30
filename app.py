@@ -10,7 +10,7 @@ st.set_page_config(page_title="Project & Sales Tracker", layout="wide")
 # ก๊อปปี้ URL จาก Google Sheet ที่แชร์แบบ Editor มาวางที่นี่
 gsheet_url = "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID_HERE/edit?usp=sharing"
 
-conn = st.connection("gsheets", type=GSheetsConnection)
+df = conn.read()
 
 def load_data():
     try:
