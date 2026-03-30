@@ -74,7 +74,7 @@ with st.expander("➕ เพิ่มกิจกรรมใหม่ (Add Acti
                     }])
                     
                     updated_df = pd.concat([df, new_row], ignore_index=True)
-                    conn.update(spreadsheet=gsheet_url, data=updated_df)
+                    conn.update(data=updated_df)
                     st.success(f"บันทึกกิจกรรม '{act_name}' เรียบร้อยแล้ว!")
                     st.rerun()
     else:
