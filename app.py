@@ -92,12 +92,18 @@ with col_f2:
 
 # Apply Filters
 filtered_df = df.copy()
+
+# บังคับให้คอลัมน์ที่ต้องใช้ค้นหาเป็น String ทั้งหมดเพื่อป้องกัน Error
+filtered_df['name'] = filtered_df['name'].astype(str)
+filtered_df['project'] = filtered_df['project'].astype(str)
+filtered_df['assignee'] = filtered_df['assignee'].astype(str)
+
 if search_project:
     filtered_df = filtered_df[filtered_df['project'].isin(search_project)]
 if search_text:
+    # ค้นหาในคอลัมน์ที่แปลงเป็น String เรียบร้อยแล้ว
     filtered_df = filtered_df[filtered_df['name'].str.contains(search_text, case=False, na=False) | 
                               filtered_df['assignee'].str.contains(search_text, case=False, na=False)]
-
 # --- Display Result ---
 if not filtered_df.empty:
     # คำนวณยอดเงินรวม (Sales Pipeline)
